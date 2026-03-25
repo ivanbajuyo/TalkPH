@@ -45,14 +45,27 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
   // Initialize socket connection
   useEffect(() => {
-    // Connect with XTransformPort for gateway
-    socketRef.current = io('/?XTransformPort=3003', {
+    // Get WebSocket URL from environment or use local gateway
+    const wsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || '';
+    const isProduction = !!wsUrl;
+
+    // In production, connect to the WebSocket service URL
+    // In development, use local gateway with XTransformPort
+    const socketUrl = isProduction
+      ? wsUrl
+      : '/?XTransformPort=3003';
+
+    const socketOptions = {
       path: '/',
-      transports: ['websocket', 'polling'],
+      transports: ['websocket', 'polling'] as const,
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
-    });
+    };
+
+    socketRef.current = isProduction
+      ? io(socketUrl, socketOptions)
+      : io(socketUrl, socketOptions);
 
     const socket = socketRef.current;
 
