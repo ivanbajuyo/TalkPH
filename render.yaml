@@ -1,0 +1,43 @@
+services:
+  # Main Next.js Web Service
+  - type: web
+    name: talkph
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: bun install && bun run db:generate && bun run build
+    startCommand: bun run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: talkph-db
+          property: connectionString
+      - key: NEXTAUTH_SECRET
+        generateValue: true
+      - key: NEXTAUTH_URL
+        value: https://talkph.onrender.com
+      - key: WEBSOCKET_URL
+        value: https://talkph-ws.onrender.com
+
+  # WebSocket Service
+  - type: web
+    name: talkph-ws
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: cd mini-services/websocket-service && bun install
+    startCommand: cd mini-services/websocket-service && PORT=$PORT bun index.ts
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+
+# PostgreSQL Database
+databases:
+  - name: talkph-db
+    region: singapore
+    plan: free
+    user: talkph

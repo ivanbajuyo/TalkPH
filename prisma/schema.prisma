@@ -1,0 +1,323 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Profiles
+model Profile {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  username          String    @unique
+  displayName       String    @map("display_name")
+  password          String?
+  avatarUrl         String?   @map("avatar_url")
+  bio               String?
+  region            String?
+  province          String?
+  city              String?
+  barangay          String?
+  isVerified        Boolean   @default(false) @map("is_verified")
+  role              String    @default("user") // user, moderator, admin
+  reputationPoints  Int       @default(0) @map("reputation_points")
+  status            String    @default("active") // active, suspended, banned
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  posts             Post[]
+  comments          Comment[]
+  reactions         Reaction[]
+  postMedia         PostMedia[]
+  commentMedia      CommentMedia[]
+  pollVotes         PollVote[]
+  savedPosts        SavedPost[]
+  reportsMade       Report[]         @relation("ReporterReports")
+  reportsReceived   Report[]         @relation("ReportedUserReports")
+  notifications     Notification[]   @relation("UserNotifications")
+  notificationsActor Notification[]  @relation("ActorNotifications")
+  reportsReviewed   Report[]         @relation("ReviewerReports")
+
+  @@map("profiles")
+}
+
+// Categories
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  iconName    String?   @map("icon_name")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  posts       Post[]
+  
+  @@map("categories")
+}
+
+// Posts
+model Post {
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  categoryId    String?   @map("category_id")
+  title         String
+  body          String?
+  postType      String    @default("discussion") @map("post_type") // discussion, question, concern, suggestion, poll, community_alert, event, help_request, barangay_concern, civic_feedback
+  isAnonymous   Boolean   @default(false) @map("is_anonymous")
+  region        String?
+  province      String?
+  city          String?
+  barangay      String?
+  isHidden      Boolean   @default(false) @map("is_hidden")
+  isLocked      Boolean   @default(false) @map("is_locked")
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  viewCount     Int       @default(0) @map("view_count")
+  commentCount  Int       @default(0) @map("comment_count")
+  reactionCount Int       @default(0) @map("reaction_count")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  user          Profile       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category      Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  tags          PostTag[]
+  media         PostMedia[]
+  comments      Comment[]
+  reactions     Reaction[]
+  poll          Poll?
+  savedBy       SavedPost[]
+  reports       Report[]
+  
+  @@index([createdAt(sort: Desc)])
+  @@index([categoryId])
+  @@index([userId])
+  @@index([postType])
+  @@map("posts")
+}
+
+// Post Tags
+model PostTag {
+  id        String   @id @default(cuid())
+  postId    String   @map("post_id")
+  tag       String
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  @@index([postId])
+  @@map("post_tags")
+}
+
+// Post Media
+model PostMedia {
+  id               String   @id @default(cuid())
+  postId           String   @map("post_id")
+  uploadedBy       String   @map("uploaded_by")
+  mediaType        String   @map("media_type") // image, video, gif
+  fileUrl          String   @map("file_url")
+  thumbnailUrl     String?  @map("thumbnail_url")
+  fileName         String?  @map("file_name")
+  fileSize         Int?     @map("file_size")
+  mimeType         String?  @map("mime_type")
+  width            Int?
+  height           Int?
+  durationSeconds  Int?     @map("duration_seconds")
+  moderationStatus String   @default("approved") @map("moderation_status") // pending, approved, flagged, rejected
+  createdAt        DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  post             Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user             Profile  @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+  reports          Report[]
+  
+  @@index([postId])
+  @@map("post_media")
+}
+
+// Comments
+model Comment {
+  id              String    @id @default(cuid())
+  postId          String    @map("post_id")
+  userId          String    @map("user_id")
+  parentCommentId String?   @map("parent_comment_id")
+  body            String
+  isDeleted       Boolean   @default(false) @map("is_deleted")
+  reactionCount   Int       @default(0) @map("reaction_count")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  post            Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user            Profile       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent          Comment?      @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies         Comment[]     @relation("CommentReplies")
+  media           CommentMedia[]
+  reactions       Reaction[]
+  reports         Report[]
+  
+  @@index([postId])
+  @@index([parentCommentId])
+  @@map("comments")
+}
+
+// Comment Media
+model CommentMedia {
+  id               String   @id @default(cuid())
+  commentId        String   @map("comment_id")
+  uploadedBy       String   @map("uploaded_by")
+  mediaType        String   @map("media_type") // image, gif
+  fileUrl          String   @map("file_url")
+  fileName         String?  @map("file_name")
+  fileSize         Int?     @map("file_size")
+  mimeType         String?  @map("mime_type")
+  moderationStatus String   @default("approved") @map("moderation_status") // pending, approved, flagged, rejected
+  createdAt        DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  comment          Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user             Profile  @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+  reports          Report[]
+  
+  @@index([commentId])
+  @@map("comment_media")
+}
+
+// Reactions
+model Reaction {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  postId       String?  @map("post_id")
+  commentId    String?  @map("comment_id")
+  reactionType String   @map("reaction_type") // like, love, funny, wow, sad, angry, support, helpful, needs_attention
+  createdAt    DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  user         Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post         Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment      Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, postId])
+  @@index([userId, commentId])
+  @@map("reactions")
+}
+
+// Polls
+model Poll {
+  id             String      @id @default(cuid())
+  postId         String      @unique @map("post_id")
+  question       String
+  allowAnonymous Boolean     @default(true) @map("allow_anonymous")
+  endsAt         DateTime?   @map("ends_at")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  
+  // Relations
+  post           Post        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  options        PollOption[]
+  votes          PollVote[]
+  
+  @@map("polls")
+}
+
+// Poll Options
+model PollOption {
+  id         String     @id @default(cuid())
+  pollId     String     @map("poll_id")
+  optionText String     @map("option_text")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  
+  // Relations
+  poll       Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes      PollVote[]
+  
+  @@index([pollId])
+  @@map("poll_options")
+}
+
+// Poll Votes
+model PollVote {
+  id        String   @id @default(cuid())
+  pollId    String   @map("poll_id")
+  optionId  String   @map("option_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user      Profile    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([pollId, userId])
+  @@index([pollId])
+  @@map("poll_votes")
+}
+
+// Saved Posts
+model SavedPost {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  postId    String   @map("post_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  user      Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, postId])
+  @@map("saved_posts")
+}
+
+// Reports
+model Report {
+  id              String    @id @default(cuid())
+  reporterId      String    @map("reporter_id")
+  reportedUserId  String?   @map("reported_user_id")
+  postId          String?   @map("post_id")
+  commentId       String?   @map("comment_id")
+  postMediaId     String?   @map("post_media_id")
+  commentMediaId  String?   @map("comment_media_id")
+  reason          String
+  details         String?
+  status          String    @default("open") // open, reviewing, resolved, dismissed
+  reviewedBy      String?   @map("reviewed_by")
+  reviewedAt      DateTime? @map("reviewed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  reporter        Profile   @relation("ReporterReports", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser    Profile?  @relation("ReportedUserReports", fields: [reportedUserId], references: [id], onDelete: SetNull)
+  reviewer        Profile?  @relation("ReviewerReports", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  post            Post?     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment         Comment?  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  postMedia       PostMedia? @relation(fields: [postMediaId], references: [id], onDelete: Cascade)
+  commentMedia    CommentMedia? @relation(fields: [commentMediaId], references: [id], onDelete: Cascade)
+  
+  @@index([status])
+  @@map("reports")
+}
+
+// Notifications
+model Notification {
+  id           String    @id @default(cuid())
+  userId       String    @map("user_id")
+  actorUserId  String?   @map("actor_user_id")
+  type         String    // post_reply, comment_reply, mention, post_reaction, comment_reaction, poll_update, moderation_action
+  postId       String?   @map("post_id")
+  commentId    String?   @map("comment_id")
+  isRead       Boolean   @default(false) @map("is_read")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  user         Profile   @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  actor        Profile?  @relation("ActorNotifications", fields: [actorUserId], references: [id], onDelete: SetNull)
+  
+  @@index([userId, isRead, createdAt(sort: Desc)])
+  @@map("notifications")
+}
